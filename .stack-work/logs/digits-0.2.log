@@ -1,0 +1,20 @@
+[1 of 1] Compiling Main             ( /tmp/stack4196/digits-0.2/Setup.lhs, /tmp/stack4196/digits-0.2/.stack-work/dist/x86_64-linux/Cabal-1.22.5.0/setup/Main.o )
+
+/tmp/stack4196/digits-0.2/Setup.lhs:3:3: Warning:
+    Module ‘System.Cmd’ is deprecated: Use "System.Process" instead
+
+/tmp/stack4196/digits-0.2/Setup.lhs:5:49: Warning:
+    In the use of ‘runTests’
+    (imported from Distribution.Simple, but defined in Distribution.Simple.UserHooks):
+    Deprecated: "Please use the new testing interface instead!"
+Linking /tmp/stack4196/digits-0.2/.stack-work/dist/x86_64-linux/Cabal-1.22.5.0/setup/setup ...
+Warning: digits.cabal: A package using 'cabal-version: >=1.2' must use section
+syntax. See the Cabal user guide for details.
+Configuring digits-0.2...
+Building digits-0.2...
+Preprocessing library digits-0.2...
+[1 of 1] Compiling Data.Digits      ( src/Data/Digits.hs, .stack-work/dist/x86_64-linux/Cabal-1.22.5.0/build/Data/Digits.o )
+In-place registering digits-0.2...
+Installing library in
+/home/nimiwio/.stack/snapshots/x86_64-linux/lts-5.2/7.10.3/lib/x86_64-linux-ghc-7.10.3/digits-0.2-7ujkJ9Il8225Qie8JA3cMU
+Registering digits-0.2...

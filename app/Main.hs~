@@ -1,0 +1,169 @@
+module Main where
+
+import Lib
+
+import Data.Char(digitToInt)
+import Data.Complex(Complex((:+)))
+import Data.Digits(unDigits)
+import Data.List(findIndices)
+import Data.Ratio((%))
+import Numeric
+import System.Environment
+
+import Text.ParserCombinators.Parsec hiding (spaces)
+
+main :: IO ()
+main = do 
+         (expr:_) <- getArgs
+         putStrLn (readExpr expr)
+
+data LispVal = Atom String
+             | List [LispVal]
+             | DottedList [LispVal] LispVal
+             | Number LispNumber
+             | String String
+             | Character Char
+             | Bool Bool
+    deriving (Show)
+
+data LispNumber = LComplex (Complex Float)
+                | LReal     Float
+                | LRational Rational
+                | LInteger  Integer
+    deriving (Show)
+
+symbol :: Parser Char
+symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
+
+letterOrNumber :: Parser Char
+letterOrNumber = oneOf $ ['0'..'9'] ++ ['a'..'z'] ++ ['A'..'Z']
+
+spaces :: Parser ()
+spaces = skipMany1 space
+
+parens = between (char '(') (char ')')
+
+quotes = between quote quote
+    where quote = char '\"'
+
+readExpr :: String -> String
+readExpr input = case parse parseExpr "lisp" input of
+    Left err -> "No match: " ++ show err
+    Right val -> "Found value " ++ show val
+
+parseString :: Parser LispVal
+parseString =
+    String <$> quotes stringContent
+            where
+                stringContent = many (nonEscaped <|> escaped)
+                nonEscaped = noneOf "\\\""
+                escaped = do
+                    char '\\' 
+                    c <- oneOf "nrt\\\""
+                    return $ case c of
+                        'n'  -> '\n'
+                        'r'  -> '\r'
+                        't'  -> '\t'
+                        '\\' -> '\\'
+                        '\"' -> '\"'
+
+parseCharacter :: Parser LispVal
+parseCharacter = do
+    string "#\\"
+    c <- (try characterName) <|> simpleCharacter 
+    return $ Character c
+        where
+            simpleCharacter = symbol <|> letterOrNumber <|> return ' '
+            characterName = 
+                    (string "backspace" >> return '\b')
+                <|> (string "newline"   >> return '\n')
+                <|> (string "page"      >> return '\f')
+                <|> (string "return"    >> return '\r')
+                <|> (string "space"     >> return ' ' )
+                <|> (string "tab"       >> return '\t')
+
+parseAtom :: Parser LispVal
+parseAtom = do 
+              first <- letter <|> symbol
+              rest <- many (letter <|> digit <|> symbol)
+              let atom = first:rest
+              return $ case atom of 
+                         "#t" -> Bool True
+                         "#f" -> Bool False
+                         _    -> Atom atom
+
+-- TODO these types might not be 100% suitable
+parseNumber :: Parser LispVal
+parseNumber = 
+        (try parseComplex  >>= (return . Number . LComplex ) )
+    <|> (try parseReal     >>= (return . Number . LReal    ) )
+    <|> (try parseRational >>= (return . Number . LRational) )
+    <|> (    parseInteger  >>= (return . Number . LInteger ) )
+
+parseComplex :: Parser (Complex Float)
+parseComplex = do
+    real <- parseReal
+    char '+'
+    imag <- parseReal
+    char 'i'
+    return $ real :+ imag
+
+parseReal :: Parser Float
+parseReal = do
+    l <- many1 digit
+    char '.'
+    r <- many digit
+    let f = l ++ "." ++ r
+    return $ (fst . head . readFloat) f
+
+parseRational :: Parser Rational
+parseRational = do
+    numerator <- parseInteger
+    char '/'
+    denominator <- parseInteger
+    return (numerator % denominator)
+
+parseInteger :: Parser Integer
+parseInteger = do
+    base <- parseBasePrefix
+    n <- many1 $ oneOf (take (fromIntegral base) validDigits)
+    return $ unDigits base $ map (toInteger . digitToInt) n
+        where validDigits = ['0'..'9'] ++ ['A'..'F']
+
+parseBasePrefix :: Parser Integer
+parseBasePrefix =
+    option 10 $ do
+        char '#'
+        b <- oneOf "bodx"
+        return $ case b of
+            'b' -> 2
+            'o' -> 8
+            'd' -> 10
+            'x' -> 16
+
+parseExpr :: Parser LispVal
+parseExpr =  try parseCharacter 
+         <|> parseString
+         <|> parseAtom
+         <|> parseNumber
+         <|> parens (try parseList <|> parseDottedList)
+
+parseList :: Parser LispVal
+parseList = List <$> sepBy parseExpr spaces
+
+parseDottedList :: Parser LispVal
+parseDottedList = do
+    head <- endBy parseExpr spaces
+    tail <- char '.' >> spaces >> parseExpr
+    return $ DottedList head tail
+
+parseQuoted :: Parser LispVal
+parseQuoted = do
+    char '\''
+    x <- parseExpr
+    return $ List [Atom "quote", x]
+
+-- TODO Excercises at end of Section Parsing
+--   1. Add support for backquote
+--   2. Add support for vectors
+

@@ -1,12 +1,11 @@
 {-# LANGUAGE ExistentialQuantification #-}
-
 module Main where
 
 --TODO make modules
 
 import Lib
 
---TODO use Except?
+--TODO use ExceptT?
 import Control.Monad.Error.Class
 import Control.Monad(liftM)
 import Data.Char(digitToInt)
@@ -17,13 +16,15 @@ import Data.Maybe(fromMaybe)
 import Data.Ratio((%), numerator, denominator)
 import Numeric
 import System.Environment
+import System.IO
+
 
 import Text.ParserCombinators.Parsec hiding (spaces)
 
 main :: IO ()
 main = do
      args <- getArgs
-     evaled <- return $ liftM show $ readExpr (args !! 0) >>= eval
+     evaled <- return $ show <$> readExpr (args !! 0) >>= eval
      putStrLn $ extractValue $ trapError evaled
 
 evalL = eval . extractValue . readExpr
@@ -50,22 +51,24 @@ data LispNumber = LComplex (Complex Float)
                 | LInteger  Integer
     deriving (Eq)
 
-instance Show LispVal where show = showVal
 showVal :: LispVal -> String
-showVal (String contents) = "\"" ++ contents ++ "\""
-showVal (Atom name) = name
-showVal (Number contents) = show contents
-showVal (Bool True) = "#t"
-showVal (Bool False) = "#f"
-showVal (List contents) = "(" ++ unwordsList contents ++ ")"
+showVal (String contents)      = "\"" ++ contents ++ "\""
+showVal (Atom name)            = name
+showVal (Number contents)      = show contents
+showVal (Bool True)            = "#t"
+showVal (Bool False)           = "#f"
+showVal (List contents)        = "(" ++ unwordsList contents ++ ")"
 showVal (DottedList head tail) = "(" ++ unwordsList head ++ " . " ++ showVal tail ++ ")"
 
-instance Show LispNumber where show = showNum
+instance Show LispVal where show = showVal
+
 showNum :: LispNumber -> String
-showNum (LComplex c) = show (realPart c) ++ "+" ++ show (imagPart c) ++ "i"
-showNum (LReal f) = show f
-showNum (LRational rat) = show (numerator rat) ++ "/" ++ show (denominator rat)
-showNum (LInteger i) = show i
+showNum (LComplex c)            = show (realPart c) ++ "+" ++ show (imagPart c) ++ "i"
+showNum (LReal f)               = show f
+showNum (LRational rat)         = show (numerator rat) ++ "/" ++ show (denominator rat)
+showNum (LInteger i)            = show i
+
+instance Show LispNumber where show = showNum
 
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
@@ -86,7 +89,7 @@ quotes = between quote quote
 
 readExpr :: String -> ThrowsError LispVal
 readExpr input = case parse parseExpr "lisp" input of
-     Left err -> throwError $ Parser err
+     Left err  -> throwError $ Parser err
      Right val -> return val
 
 parseString :: Parser LispVal
@@ -212,7 +215,7 @@ eval (List [Atom "if", pred, conseq, alt]) =
      do result <- eval pred
         case result of
              Bool False -> eval alt
-             otherwise  -> eval conseq
+             _          -> eval conseq
 eval (List (Atom func : args)) = mapM eval args >>= apply func 
 eval badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
 
@@ -280,16 +283,16 @@ unpackBool notBool  = throwError $ TypeMismatch "boolean" notBool
 
 -- Note: this converts even Complex/Real/Rational types to Integer
 unpackNum :: LispVal -> ThrowsError Integer
-unpackNum (Number (LComplex c)) = return $ toInteger $ round $ realPart c
-unpackNum (Number (LReal f)) = return $ toInteger $ round f
+unpackNum (Number (LComplex c))  = return $ toInteger $ round $ realPart c
+unpackNum (Number (LReal f))     = return $ toInteger $ round f
 unpackNum (Number (LRational r)) = return $ toInteger $ round r
-unpackNum (Number (LInteger n)) = return $ n
+unpackNum (Number (LInteger n))  = return $ n
 unpackNum (String n) = let parsed = reads n in 
                            if null parsed 
                               then throwError $ TypeMismatch "number" $ String n
                               else return $ fst $ parsed !! 0
 unpackNum (List [n]) = unpackNum n
-unpackNum notNum = throwError $ TypeMismatch "number" notNum
+unpackNum notNum     = throwError $ TypeMismatch "number" notNum
 
 car :: [LispVal] -> ThrowsError LispVal
 car [List (x : xs)]         = return x
@@ -305,11 +308,11 @@ cdr [badArg]                = throwError $ TypeMismatch "pair" badArg
 cdr badArgList              = throwError $ NumArgs 1 badArgList
 
 cons :: [LispVal] -> ThrowsError LispVal
-cons [x1, List []] = return $ List [x1]
-cons [x, List xs] = return $ List $ x : xs
+cons [x1, List []]            = return $ List [x1]
+cons [x, List xs]             = return $ List $ x : xs
 cons [x, DottedList xs xlast] = return $ DottedList (x : xs) xlast
-cons [x1, x2] = return $ DottedList [x1] x2
-cons badArgList = throwError $ NumArgs 2 badArgList
+cons [x1, x2]                 = return $ DottedList [x1] x2
+cons badArgList               = throwError $ NumArgs 2 badArgList
 
 eqv :: [LispVal] -> ThrowsError LispVal
 eqv [(Bool arg1), (Bool arg2)]             = return $ Bool $ arg1 == arg2
@@ -336,7 +339,7 @@ unpackEquals arg1 arg2 (AnyUnpacker unpacker) =
 
 equal :: [LispVal] -> ThrowsError LispVal
 equal [arg1, arg2] = do
-      primitiveEquals <- liftM or $ mapM (unpackEquals arg1 arg2) 
+      primitiveEquals <- or <$> mapM (unpackEquals arg1 arg2) 
                          [AnyUnpacker unpackNum, AnyUnpacker unpackStr, AnyUnpacker unpackBool]
       eqvEquals <- eqv [arg1, arg2]
       return $ Bool $ (primitiveEquals || let (Bool x) = eqvEquals in x)
@@ -364,5 +367,5 @@ type ThrowsError = Either LispError
 
 trapError action = catchError action (return . show)
 
-extractValue :: ThrowsError a -> a
+extractValue :: ThrowsError a  -> a
 extractValue (Right val) = val

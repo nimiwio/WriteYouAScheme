@@ -18,13 +18,12 @@ import Numeric
 import System.Environment
 import System.IO
 
-
 import Text.ParserCombinators.Parsec hiding (spaces)
 
 main :: IO ()
 main = do
      args <- getArgs
-     evaled <- return $ show <$> readExpr (args !! 0) >>= eval
+     evaled <- return $ fmap show $ readExpr (args !! 0) >>= eval
      putStrLn $ extractValue $ trapError evaled
 
 evalL = eval . extractValue . readExpr
@@ -369,3 +368,20 @@ trapError action = catchError action (return . show)
 
 extractValue :: ThrowsError a  -> a
 extractValue (Right val) = val
+
+
+
+
+
+-- REPL --
+flushStr :: String -> IO ()
+flushStr str = putStr str >> hFlush stdout
+
+readPrompt :: String -> IO String
+readPrompt prompt = flushStr prompt >> getLine
+
+evalString :: String -> IO String
+evalString expr = return $ extractValue $ trapError (fmap show $ readExpr expr >>= eval)
+
+evalAndPrint :: String -> IO ()
+evalAndPrint expr =  evalString expr >>= putStrLn

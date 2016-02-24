@@ -81,6 +81,9 @@ letterOrNumber = oneOf $ ['0'..'9'] ++ ['a'..'z'] ++ ['A'..'Z']
 spaces :: Parser ()
 spaces = skipMany1 space
 
+maybeSpaces :: Parser ()
+maybeSpaces = skipMany space
+
 parens = between (char '(') (char ')')
 
 quotes = between quote quote
@@ -186,7 +189,11 @@ parseExpr =  try parseCharacter
          <|> parens (try parseList <|> parseDottedList)
 
 parseList :: Parser LispVal
-parseList = List <$> sepBy parseExpr spaces
+parseList = do 
+    maybeSpaces
+    list <- sepBy parseExpr spaces
+    maybeSpaces
+    return $ List list 
 
 parseDottedList :: Parser LispVal
 parseDottedList = do
@@ -196,7 +203,7 @@ parseDottedList = do
 
 parseQuoted :: Parser LispVal
 parseQuoted = do
-    char '\''
+    (char '\'' <|> char '`')
     x <- parseExpr
     return $ List [Atom "quote", x]
 

@@ -28,6 +28,7 @@ executable scheme-exe
                      , digits
                      , mtl
                      , parsec
+                     , transformers
   default-language:    Haskell2010
 
 test-suite scheme-test
